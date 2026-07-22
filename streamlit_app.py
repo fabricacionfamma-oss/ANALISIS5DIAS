@@ -83,12 +83,15 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
         """
         df_horarios = conn.query(q_horarios)
 
+        # Restauramos los 9 niveles para obtener la descripcion exacta del final del arbol
         q_event = f"""
             SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, 
                    e.Interval as [Tiempo (Min)], 
                    t1.Name as [Nivel Evento 1], t2.Name as [Nivel Evento 2], 
                    t3.Name as [Nivel Evento 3], t4.Name as [Nivel Evento 4], 
                    t5.Name as [Nivel Evento 5], t6.Name as [Nivel Evento 6],
+                   t7.Name as [Nivel Evento 7], t8.Name as [Nivel Evento 8],
+                   t9.Name as [Nivel Evento 9],
                    e.Date as Fecha_Filtro
             FROM EVENT_01 e
             LEFT JOIN CELL c ON e.CellId = c.CellId
@@ -98,6 +101,9 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
             LEFT JOIN EVENTTYPE t4 ON e.EventTypeLevel4 = t4.EventTypeId
             LEFT JOIN EVENTTYPE t5 ON e.EventTypeLevel5 = t5.EventTypeId
             LEFT JOIN EVENTTYPE t6 ON e.EventTypeLevel6 = t6.EventTypeId
+            LEFT JOIN EVENTTYPE t7 ON e.EventTypeLevel7 = t7.EventTypeId
+            LEFT JOIN EVENTTYPE t8 ON e.EventTypeLevel8 = t8.EventTypeId
+            LEFT JOIN EVENTTYPE t9 ON e.EventTypeLevel9 = t9.EventTypeId
             WHERE e.Date BETWEEN '{ini_str}' AND '{fin_str}'
         """
         df_eventos = conn.query(q_event)
@@ -105,6 +111,8 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
         if not df_eventos.empty:
             df_eventos['Tiempo (Min)'] = pd.to_numeric(df_eventos['Tiempo (Min)'], errors='coerce').fillna(0)
             df_eventos['Fecha'] = pd.to_datetime(df_eventos['Fecha_Filtro']).dt.date
+            df_eventos['Hora_Inicio'] = pd.to_datetime(df_eventos['Inicio']).dt.strftime('%H:%M')
+            df_eventos['Hora_Fin'] = pd.to_datetime(df_eventos['Fin']).dt.strftime('%H:%M')
             
             cols_niveles = [c for c in df_eventos.columns if 'Nivel Evento' in c]
 
@@ -124,8 +132,23 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
                         return cat.capitalize()
                 return 'Otra Falla/Gestión'
 
+            def obtener_detalle_final(row):
+                niveles = [str(row.get(c, '')) for c in cols_niveles]
+                validos = [n.strip() for n in niveles if n.strip() and n.strip().lower() not in ['none', 'nan', 'null']]
+                if not validos: return "Sin detalle en sistema"
+                ultimo_dato = validos[-1].upper()
+                estado = row.get('Estado_Global', '')
+                categoria = row.get('Categoria_Macro', '')
+                if estado == 'Falla/Gestión':
+                    if categoria != 'Otra Falla/Gestión':
+                        return f"[{categoria.upper()}] {ultimo_dato}"
+                    return ultimo_dato
+                return validos[-1]
+
             df_eventos['Estado_Global'] = df_eventos.apply(categorizar_estado, axis=1)
             df_eventos['Categoria_Macro'] = df_eventos.apply(clasificar_macro, axis=1)
+            # Aplicamos la funcion para obtener el detalle del ultimo nivel
+            df_eventos['Detalle_Final'] = df_eventos.apply(obtener_detalle_final, axis=1)
 
         return df_prod, df_metrics, df_horarios, df_eventos
 
@@ -193,11 +216,9 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     st.markdown(f"### 📈 Indicadores Generales - {area_name}")
     st.caption(f"**Máquinas Operativas en el periodo:** {maquinas_str}")
     
-    # Columnas necesarias para ponderación
     df_m_area['T_Planificado'] = df_m_area['T_Operativo'].fillna(0) + df_m_area['T_Parada'].fillna(0)
     df_m_area['Piezas_Totales'] = df_m_area['Buenas'].fillna(0) + df_m_area['Retrabajo'].fillna(0) + df_m_area['Observadas'].fillna(0)
     
-    # Totales para promedios ponderados
     t_operativo_tot = df_m_area['T_Operativo'].sum()
     t_planificado_tot = df_m_area['T_Planificado'].sum()
     piezas_tot = df_m_area['Piezas_Totales'].sum()
@@ -258,7 +279,6 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     # --- SECCIÓN 3: DESGLOSE POR MÁQUINA ---
     st.markdown(f"### 🏭 Desempeño Individual por Máquina - {area_name}")
     
-    # Hacemos una copia y multiplicamos por 100 ANTES de enviarlo al dataframe
     df_maq_show = df_m_area[['Máquina', 'OEE', 'DISPONIBILIDAD', 'PERFORMANCE', 'CALIDAD']].copy()
     df_maq_show['OEE'] = df_maq_show['OEE'] * 100
     df_maq_show['DISPONIBILIDAD'] = df_maq_show['DISPONIBILIDAD'] * 100
@@ -280,26 +300,37 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     
     st.divider()
 
-    # --- SECCIÓN 4: HORARIOS Y PRODUCCIÓN DIARIA ---
-    st.markdown(f"### 🕒 Horarios de Producción - {area_name}")
+    # --- SECCIÓN 4: CRONOLOGÍA DE EVENTOS DESPLEGABLE ---
+    st.markdown(f"### 🕒 Cronología de Eventos y Producción - {area_name}")
+    st.caption("Despliega cada día para ver en detalle los registros ordenados cronológicamente.")
     
-    col_h1, col_h2 = st.columns(2)
-    with col_h1:
-        st.markdown("**Tabla de Horarios**")
-        if not df_h_area.empty:
-            df_h_show = df_h_area[['Dia', 'Turno', 'Máquina', 'Hora_Inicio', 'Hora_Cierre', 'Apertura_Neta_Min']].copy()
-            df_h_show['Dia'] = pd.to_datetime(df_h_show['Dia']).dt.strftime('%d/%m/%Y')
-            st.dataframe(df_h_show.sort_values(by=['Dia', 'Turno']), hide_index=True, use_container_width=True)
-        else:
-            st.info("No hay horarios.")
+    if not df_e_area.empty:
+        # Ordenar cronológicamente todo
+        df_e_area = df_e_area.sort_values(by=['Fecha', 'Inicio'])
+        fechas_unicas = df_e_area['Fecha'].unique()
+        
+        for fecha in fechas_unicas:
+            df_dia = df_e_area[df_e_area['Fecha'] == fecha]
+            fecha_str = pd.to_datetime(fecha).strftime('%d/%m/%Y')
             
-    with col_h2:
-        st.markdown("**Producción por Día (Eventos)**")
-        if not df_e_area.empty:
-            prod_resumen = df_e_area[df_e_area['Estado_Global']=='Producción'].groupby('Fecha')['Tiempo (Min)'].sum().reset_index()
-            st.dataframe(prod_resumen, hide_index=True, use_container_width=True)
-        else:
-            st.info("No hay eventos de producción.")
+            with st.expander(f"📅 Registros del {fecha_str} ({len(df_dia)} eventos)"):
+                df_show = df_dia[['Hora_Inicio', 'Hora_Fin', 'Máquina', 'Estado_Global', 'Detalle_Final', 'Tiempo (Min)']].copy()
+                
+                st.dataframe(
+                    df_show,
+                    column_config={
+                        "Hora_Inicio": "Inicio",
+                        "Hora_Fin": "Fin",
+                        "Máquina": st.column_config.TextColumn("Máquina", width="medium"),
+                        "Estado_Global": "Tipo de Evento",
+                        "Detalle_Final": st.column_config.TextColumn("Descripción Detallada (Último Nivel)", width="large"),
+                        "Tiempo (Min)": st.column_config.NumberColumn("Duración (Min)", format="%.1f")
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+    else:
+        st.info("No hay eventos registrados para mostrar en el cronograma.")
 
 # ==========================================
 # 5. PESTAÑAS PRINCIPALES (SOLO PARA ÁREAS)
