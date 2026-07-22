@@ -83,7 +83,6 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
         """
         df_horarios = conn.query(q_horarios)
 
-        # Restauramos los 9 niveles para obtener la descripcion exacta del final del arbol
         q_event = f"""
             SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, 
                    e.Interval as [Tiempo (Min)], 
@@ -147,7 +146,6 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
 
             df_eventos['Estado_Global'] = df_eventos.apply(categorizar_estado, axis=1)
             df_eventos['Categoria_Macro'] = df_eventos.apply(clasificar_macro, axis=1)
-            # Aplicamos la funcion para obtener el detalle del ultimo nivel
             df_eventos['Detalle_Final'] = df_eventos.apply(obtener_detalle_final, axis=1)
 
         return df_prod, df_metrics, df_horarios, df_eventos
@@ -247,8 +245,9 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
             
             if total_downtime_area == 0: total_downtime_area = total_fallas_min
             
-            fallas_grp['% DE LAS FALLAS'] = (fallas_grp['Tiempo (Min)'] / total_fallas_min)
-            fallas_grp['% DOWN TIME'] = (fallas_grp['Tiempo (Min)'] / total_downtime_area)
+            # Multiplicamos por 100 para que se visualice correctamente como porcentaje
+            fallas_grp['% DE LAS FALLAS'] = (fallas_grp['Tiempo (Min)'] / total_fallas_min) * 100
+            fallas_grp['% DOWN TIME'] = (fallas_grp['Tiempo (Min)'] / total_downtime_area) * 100
             
             fallas_grp = fallas_grp.rename(columns={'Categoria_Macro': 'CATEGORÍA', 'Tiempo (Min)': 'TIEMPO (MIN)'})
             
@@ -300,12 +299,55 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     
     st.divider()
 
-    # --- SECCIÓN 4: CRONOLOGÍA DE EVENTOS DESPLEGABLE ---
-    st.markdown(f"### 🕒 Cronología de Eventos y Producción - {area_name}")
+    # --- SECCIÓN 4: HORARIOS Y PRODUCCIÓN DIARIA ---
+    st.markdown(f"### 🕒 Horarios de Producción - {area_name}")
+    
+    col_h1, col_h2 = st.columns(2)
+    with col_h1:
+        st.markdown("**Tabla de Horarios**")
+        if not df_h_area.empty:
+            df_h_show = df_h_area[['Dia', 'Turno', 'Máquina', 'Hora_Inicio', 'Hora_Cierre', 'Apertura_Neta_Min']].copy()
+            df_h_show['Dia'] = pd.to_datetime(df_h_show['Dia']).dt.strftime('%d/%m/%Y')
+            st.dataframe(df_h_show.sort_values(by=['Dia', 'Turno']), hide_index=True, use_container_width=True)
+        else:
+            st.info("No hay horarios.")
+            
+    with col_h2:
+        st.markdown("**Producción por Día (Eventos)**")
+        if not df_e_area.empty:
+            df_prod_eventos = df_e_area[df_e_area['Estado_Global'] == 'Producción'].copy()
+            
+            if not df_prod_eventos.empty:
+                prod_resumen = df_prod_eventos.groupby('Fecha').agg(
+                    Cantidad_Eventos=('Evento_Id', 'count'),
+                    Tiempo_Min=('Tiempo (Min)', 'sum')
+                ).reset_index()
+                
+                prod_resumen['Horas_Totales'] = prod_resumen['Tiempo_Min'] / 60.0
+                
+                st.dataframe(
+                    prod_resumen, 
+                    column_config={
+                        "Fecha": "Fecha",
+                        "Cantidad_Eventos": st.column_config.NumberColumn("Cant. Eventos"),
+                        "Tiempo_Min": st.column_config.NumberColumn("Tiempo (Min)", format="%.1f"),
+                        "Horas_Totales": st.column_config.NumberColumn("Horas Totales", format="%.2f hs")
+                    },
+                    hide_index=True, 
+                    use_container_width=True
+                )
+            else:
+                st.info("No hay eventos de producción en los días seleccionados.")
+        else:
+            st.info("No hay eventos registrados.")
+
+    st.divider()
+
+    # --- SECCIÓN 5: CRONOLOGÍA DE EVENTOS DESPLEGABLE ---
+    st.markdown(f"### 📋 Cronología de Eventos - {area_name}")
     st.caption("Despliega cada día para ver en detalle los registros ordenados cronológicamente.")
     
     if not df_e_area.empty:
-        # Ordenar cronológicamente todo
         df_e_area = df_e_area.sort_values(by=['Fecha', 'Inicio'])
         fechas_unicas = df_e_area['Fecha'].unique()
         
@@ -333,7 +375,7 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
         st.info("No hay eventos registrados para mostrar en el cronograma.")
 
 # ==========================================
-# 5. PESTAÑAS PRINCIPALES (SOLO PARA ÁREAS)
+# 6. PESTAÑAS PRINCIPALES (SOLO PARA ÁREAS)
 # ==========================================
 tab_estampado, tab_soldadura = st.tabs(["🏭 ESTAMPADO", "🔥 SOLDADURA"])
 
