@@ -245,7 +245,6 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
             
             if total_downtime_area == 0: total_downtime_area = total_fallas_min
             
-            # Multiplicamos por 100 para que se visualice correctamente como porcentaje
             fallas_grp['% DE LAS FALLAS'] = (fallas_grp['Tiempo (Min)'] / total_fallas_min) * 100
             fallas_grp['% DOWN TIME'] = (fallas_grp['Tiempo (Min)'] / total_downtime_area) * 100
             
@@ -299,36 +298,57 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     
     st.divider()
 
-    # --- SECCIÓN 4: HORARIOS Y PRODUCCIÓN DIARIA ---
+    # --- SECCIÓN 4: HORARIOS Y PRODUCCIÓN DIARIA POR MÁQUINA ---
     st.markdown(f"### 🕒 Horarios de Producción - {area_name}")
     
     col_h1, col_h2 = st.columns(2)
     with col_h1:
-        st.markdown("**Tabla de Horarios**")
+        st.markdown("**Tabla de Horarios por Máquina**")
         if not df_h_area.empty:
-            df_h_show = df_h_area[['Dia', 'Turno', 'Máquina', 'Hora_Inicio', 'Hora_Cierre', 'Apertura_Neta_Min']].copy()
-            df_h_show['Dia'] = pd.to_datetime(df_h_show['Dia']).dt.strftime('%d/%m/%Y')
-            st.dataframe(df_h_show.sort_values(by=['Dia', 'Turno']), hide_index=True, use_container_width=True)
+            # Agrupamos por día y máquina para sacar hora de apertura real (mínima) y cierre real (máxima)
+            df_h_grouped = df_h_area.groupby(['Dia', 'Máquina']).agg(
+                Hora_Inicio=('Hora_Inicio', 'min'),
+                Hora_Cierre=('Hora_Cierre', 'max'),
+                Apertura_Neta_Min=('Apertura_Neta_Min', 'sum')
+            ).reset_index()
+            
+            df_h_grouped['Dia'] = pd.to_datetime(df_h_grouped['Dia']).dt.strftime('%d/%m/%Y')
+            
+            st.dataframe(
+                df_h_grouped.sort_values(by=['Dia', 'Máquina']), 
+                column_config={
+                    "Dia": "Fecha",
+                    "Máquina": "Máquina",
+                    "Hora_Inicio": "Apertura",
+                    "Hora_Cierre": "Cierre",
+                    "Apertura_Neta_Min": st.column_config.NumberColumn("Apertura Neta (Min)", format="%.1f")
+                },
+                hide_index=True, 
+                use_container_width=True
+            )
         else:
             st.info("No hay horarios.")
             
     with col_h2:
-        st.markdown("**Producción por Día (Eventos)**")
+        st.markdown("**Producción por Día y Máquina (Eventos)**")
         if not df_e_area.empty:
             df_prod_eventos = df_e_area[df_e_area['Estado_Global'] == 'Producción'].copy()
             
             if not df_prod_eventos.empty:
-                prod_resumen = df_prod_eventos.groupby('Fecha').agg(
+                # Agrupamos también por Fecha y Máquina
+                prod_resumen = df_prod_eventos.groupby(['Fecha', 'Máquina']).agg(
                     Cantidad_Eventos=('Evento_Id', 'count'),
                     Tiempo_Min=('Tiempo (Min)', 'sum')
                 ).reset_index()
                 
                 prod_resumen['Horas_Totales'] = prod_resumen['Tiempo_Min'] / 60.0
+                prod_resumen['Fecha'] = pd.to_datetime(prod_resumen['Fecha']).dt.strftime('%d/%m/%Y')
                 
                 st.dataframe(
-                    prod_resumen, 
+                    prod_resumen.sort_values(by=['Fecha', 'Máquina']), 
                     column_config={
                         "Fecha": "Fecha",
+                        "Máquina": "Máquina",
                         "Cantidad_Eventos": st.column_config.NumberColumn("Cant. Eventos"),
                         "Tiempo_Min": st.column_config.NumberColumn("Tiempo (Min)", format="%.1f"),
                         "Horas_Totales": st.column_config.NumberColumn("Horas Totales", format="%.2f hs")
@@ -343,27 +363,27 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
 
     st.divider()
 
-    # --- SECCIÓN 5: CRONOLOGÍA DE EVENTOS DESPLEGABLE ---
+    # --- SECCIÓN 5: CRONOLOGÍA DE EVENTOS POR MÁQUINA ---
     st.markdown(f"### 📋 Cronología de Eventos - {area_name}")
-    st.caption("Despliega cada día para ver en detalle los registros ordenados cronológicamente.")
+    st.caption("Despliega cada máquina para ver en detalle sus registros ordenados cronológicamente.")
     
     if not df_e_area.empty:
         df_e_area = df_e_area.sort_values(by=['Fecha', 'Inicio'])
-        fechas_unicas = df_e_area['Fecha'].unique()
+        maquinas_ev = sorted(df_e_area['Máquina'].unique())
         
-        for fecha in fechas_unicas:
-            df_dia = df_e_area[df_e_area['Fecha'] == fecha]
-            fecha_str = pd.to_datetime(fecha).strftime('%d/%m/%Y')
+        for maq in maquinas_ev:
+            df_maq_ev = df_e_area[df_e_area['Máquina'] == maq]
             
-            with st.expander(f"📅 Registros del {fecha_str} ({len(df_dia)} eventos)"):
-                df_show = df_dia[['Hora_Inicio', 'Hora_Fin', 'Máquina', 'Estado_Global', 'Detalle_Final', 'Tiempo (Min)']].copy()
+            with st.expander(f"⚙️ Registros de {maq} ({len(df_maq_ev)} eventos)"):
+                df_show = df_maq_ev[['Fecha', 'Hora_Inicio', 'Hora_Fin', 'Estado_Global', 'Detalle_Final', 'Tiempo (Min)']].copy()
+                df_show['Fecha'] = pd.to_datetime(df_show['Fecha']).dt.strftime('%d/%m/%Y')
                 
                 st.dataframe(
                     df_show,
                     column_config={
+                        "Fecha": "Fecha",
                         "Hora_Inicio": "Inicio",
                         "Hora_Fin": "Fin",
-                        "Máquina": st.column_config.TextColumn("Máquina", width="medium"),
                         "Estado_Global": "Tipo de Evento",
                         "Detalle_Final": st.column_config.TextColumn("Descripción Detallada (Último Nivel)", width="large"),
                         "Tiempo (Min)": st.column_config.NumberColumn("Duración (Min)", format="%.1f")
