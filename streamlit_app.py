@@ -149,7 +149,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
         df_h_fam = conn_fam.query(q_horarios)
         df_e_fam = conn_fam.query(q_event)
     except Exception as e:
-        st.warning(f"Error conectando a FAMMA: {e}")
+        st.warning(f"Error conectando a FAMMA (Puerto 1443): {e}")
         df_p_fam, df_m_fam, df_h_fam, df_e_fam = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     # --- EXTRAER DATOS FUMISCOR ---
@@ -160,7 +160,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
         df_h_fum = conn_fumi.query(q_horarios)
         df_e_fum = conn_fumi.query(q_event)
     except Exception as e:
-        st.warning(f"Error conectando a FUMISCOR: {e}")
+        st.warning(f"Error conectando a FUMISCOR (Puerto 1433): {e}")
         df_p_fum, df_m_fum, df_h_fum, df_e_fum = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
     # --- UNIR AMBAS BASES DE DATOS ---
@@ -483,7 +483,6 @@ st.divider()
 st.markdown("### 📝 Registro de Planes de Acción")
 st.caption("Añade y revisa los planes de acción para los indicadores, máquinas o eventos que se encuentren fuera de objetivo.")
 
-# URL con &rm=minimal para ocultar la barra de herramientas de Google
 URL_GOOGLE_SHEET = "https://docs.google.com/spreadsheets/d/1SoNRJjE4Kg2x_bRgylMRQs70JO-2wLOFQtUlBjx1-EA/edit?rm=minimal#gid=0"
 
 # Usar HTML puro evita que la página salte hacia arriba al hacer clic
@@ -500,5 +499,4 @@ html_iframe = f"""
 
 st.markdown(html_iframe, unsafe_allow_html=True)
 
-# Botón extra por si necesitan mayor comodidad
 st.markdown(f'<a href="{URL_GOOGLE_SHEET}" target="_blank" style="text-decoration: none;"><button style="margin-top: 10px; padding: 8px 15px; border-radius: 5px; background-color: #3498db; color: white; border: none; cursor: pointer;">Abrir en pestaña completa ↗️</button></a>', unsafe_allow_html=True)
