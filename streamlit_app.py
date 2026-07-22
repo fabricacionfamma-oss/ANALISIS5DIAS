@@ -303,7 +303,6 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     st.markdown("**Tabla de Horarios por Máquina**")
 
     if not df_h_area.empty:
-        # Agrupamos por día y máquina
         df_h_grouped = df_h_area.groupby(['Dia', 'Máquina']).agg(
             Hora_Inicio=('Hora_Inicio', 'min'),
             Hora_Cierre=('Hora_Cierre', 'max'),
@@ -334,7 +333,6 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     st.caption("Despliega cada máquina y día para ver en detalle sus registros ordenados cronológicamente.")
     
     if not df_e_area.empty:
-        # Ordenamos por Máquina, luego por Fecha, y finalmente por la Hora de Inicio
         df_e_area = df_e_area.sort_values(by=['Máquina', 'Fecha', 'Inicio'])
         maquinas_ev = sorted(df_e_area['Máquina'].unique())
         
@@ -374,3 +372,16 @@ with tab_estampado:
 
 with tab_soldadura:
     render_area_dashboard("SOLDADURA", GRUPOS_SOLDADURA, df_metrics, df_eventos, df_prod, df_horarios)
+
+# ==========================================
+# 7. PLANES DE ACCIÓN (GOOGLE SHEETS)
+# ==========================================
+st.divider()
+st.markdown("### 📝 Registro de Planes de Acción")
+st.caption("Añade y revisa los planes de acción para los indicadores, máquinas o eventos que se encuentren fuera de objetivo.")
+
+# URL con &rm=minimal para ocultar la barra de herramientas y simular un componente nativo
+URL_GOOGLE_SHEET = "https://docs.google.com/spreadsheets/d/1SoNRJjE4Kg2x_bRgylMRQs70JO-2wLOFQtUlBjx1-EA/edit?rm=minimal#gid=0"
+
+# Incrustar el Google Sheet de forma interactiva
+st.components.v1.iframe(URL_GOOGLE_SHEET, height=600, scrolling=True)
