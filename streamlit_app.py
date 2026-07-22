@@ -85,29 +85,47 @@ def fetch_data_from_db(fecha_ini, fecha_fin):
 
         q_event = f"""
             SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, 
-                   e.Interval as [Tiempo (Min)], t1.Name as Categoria_Macro, t2.Name as Detalle_Final,
+                   e.Interval as [Tiempo (Min)], 
+                   t1.Name as [Nivel Evento 1], t2.Name as [Nivel Evento 2], 
+                   t3.Name as [Nivel Evento 3], t4.Name as [Nivel Evento 4], 
+                   t5.Name as [Nivel Evento 5], t6.Name as [Nivel Evento 6],
                    e.Date as Fecha_Filtro
             FROM EVENT_01 e
             LEFT JOIN CELL c ON e.CellId = c.CellId
             LEFT JOIN EVENTTYPE t1 ON e.EventTypeLevel1 = t1.EventTypeId
             LEFT JOIN EVENTTYPE t2 ON e.EventTypeLevel2 = t2.EventTypeId
+            LEFT JOIN EVENTTYPE t3 ON e.EventTypeLevel3 = t3.EventTypeId
+            LEFT JOIN EVENTTYPE t4 ON e.EventTypeLevel4 = t4.EventTypeId
+            LEFT JOIN EVENTTYPE t5 ON e.EventTypeLevel5 = t5.EventTypeId
+            LEFT JOIN EVENTTYPE t6 ON e.EventTypeLevel6 = t6.EventTypeId
             WHERE e.Date BETWEEN '{ini_str}' AND '{fin_str}'
         """
         df_eventos = conn.query(q_event)
 
         if not df_eventos.empty:
             df_eventos['Tiempo (Min)'] = pd.to_numeric(df_eventos['Tiempo (Min)'], errors='coerce').fillna(0)
-            df_eventos['Categoria_Macro'] = df_eventos['Categoria_Macro'].fillna('No Asignado')
             df_eventos['Fecha'] = pd.to_datetime(df_eventos['Fecha_Filtro']).dt.date
             
-            def categorizar(row):
-                texto = str(row['Categoria_Macro']).upper() + " " + str(row['Detalle_Final']).upper()
-                if 'PRODUCCION' in texto or 'PRODUCCIÓN' in texto: return 'Producción'
-                if 'BAÑO' in texto or 'REFRIGERIO' in texto: return 'Descanso'
-                if 'PARADA' in texto: return 'Parada Programada'
+            cols_niveles = [c for c in df_eventos.columns if 'Nivel Evento' in c]
+
+            def categorizar_estado(row):
+                texto_completo = " ".join([str(row.get(c, '')) for c in cols_niveles]).upper()
+                if 'PRODUCCION' in texto_completo or 'PRODUCCIÓN' in texto_completo: return 'Producción'
+                if 'PROYECTO' in texto_completo: return 'Proyecto'
+                if 'BAÑO' in texto_completo or 'BANO' in texto_completo or 'REFRIGERIO' in texto_completo: return 'Descanso'
+                if 'PARADA PROGRAMADA' in texto_completo: return 'Parada Programada'
                 return 'Falla/Gestión'
-            
-            df_eventos['Estado_Global'] = df_eventos.apply(categorizar, axis=1)
+
+            def clasificar_macro(row):
+                texto_completo = " ".join([str(row.get(c, '')) for c in cols_niveles]).upper()
+                categorias_clave = ["MANTENIMIENTO", "MATRICERIA", "DISPOSITIVOS", "TECNOLOGIA", "GESTION", "LOGISTICA", "CALIDAD"]
+                for cat in categorias_clave:
+                    if cat in texto_completo:
+                        return cat.capitalize()
+                return 'Otra Falla/Gestión'
+
+            df_eventos['Estado_Global'] = df_eventos.apply(categorizar_estado, axis=1)
+            df_eventos['Categoria_Macro'] = df_eventos.apply(clasificar_macro, axis=1)
 
         return df_prod, df_metrics, df_horarios, df_eventos
 
@@ -150,15 +168,15 @@ for df in [df_metrics, df_prod, df_horarios, df_eventos]:
     if not df.empty and 'Máquina' in df.columns:
         df['Grupo'] = df['Máquina'].apply(asignar_grupo_dinamico)
 
+# Estandarizar base métrica a rango [0, 1] internamente para hacer bien los cálculos
 if df_metrics['OEE'].max() > 1.5:  
     for col in ['OEE', 'PERFORMANCE', 'DISPONIBILIDAD', 'CALIDAD']:
         df_metrics[col] = df_metrics[col] / 100.0
 
 # ==========================================
-# 4. FUNCIÓN RENDERIZADORA DE ÁREAS (SCROLL CONTINUO)
+# 4. FUNCIÓN RENDERIZADORA DE ÁREAS
 # ==========================================
 def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
-    # Filtrar datos exclusivos de esta área
     df_m_area = df_m[df_m['Grupo'].isin(grupos_area)].copy()
     df_e_area = df_e[df_e['Grupo'].isin(grupos_area)].copy() if not df_e.empty else pd.DataFrame()
     df_p_area = df_p[df_p['Grupo'].isin(grupos_area)].copy() if not df_p.empty else pd.DataFrame()
@@ -168,19 +186,30 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
         st.info(f"No hay datos registrados para el área de {area_name} en este periodo.")
         return
 
+    maquinas_activas = sorted(df_m_area['Máquina'].unique().tolist())
+    maquinas_str = ", ".join(maquinas_activas)
+
     # --- SECCIÓN 1: KPIs ---
     st.markdown(f"### 📈 Indicadores Generales - {area_name}")
-    t_operativo_tot = df_m_area['T_Operativo'].sum()
-    t_planificado_tot = df_m_area['T_Operativo'].sum() + df_m_area['T_Parada'].sum()
+    st.caption(f"**Máquinas Operativas en el periodo:** {maquinas_str}")
     
-    perf_global = (df_m_area['PERFORMANCE'] * df_m_area['T_Operativo']).sum() / t_operativo_tot if t_operativo_tot else 0
-    disp_global = (df_m_area['DISPONIBILIDAD'] * t_planificado_tot).sum() / t_planificado_tot if t_planificado_tot else 0
-    cal_global = df_m_area['CALIDAD'].mean() 
+    # Columnas necesarias para ponderación
+    df_m_area['T_Planificado'] = df_m_area['T_Operativo'].fillna(0) + df_m_area['T_Parada'].fillna(0)
+    df_m_area['Piezas_Totales'] = df_m_area['Buenas'].fillna(0) + df_m_area['Retrabajo'].fillna(0) + df_m_area['Observadas'].fillna(0)
+    
+    # Totales para promedios ponderados
+    t_operativo_tot = df_m_area['T_Operativo'].sum()
+    t_planificado_tot = df_m_area['T_Planificado'].sum()
+    piezas_tot = df_m_area['Piezas_Totales'].sum()
+    
+    perf_global = (df_m_area['PERFORMANCE'] * df_m_area['T_Operativo']).sum() / t_operativo_tot if t_operativo_tot > 0 else 0
+    disp_global = (df_m_area['DISPONIBILIDAD'] * df_m_area['T_Planificado']).sum() / t_planificado_tot if t_planificado_tot > 0 else 0
+    cal_global = (df_m_area['CALIDAD'] * df_m_area['Piezas_Totales']).sum() / piezas_tot if piezas_tot > 0 else 0
     
     c1, c2, c3 = st.columns(3)
-    c1.metric("PERFORMANCE", f"{perf_global*100:.1f}%")
-    c2.metric("DISPONIBILIDAD", f"{disp_global*100:.1f}%")
-    c3.metric("CALIDAD", f"{cal_global*100:.1f}%")
+    c1.metric("PERFORMANCE", f"{perf_global*100:.2f}%")
+    c2.metric("DISPONIBILIDAD", f"{disp_global*100:.2f}%")
+    c3.metric("CALIDAD", f"{cal_global*100:.2f}%")
     
     st.divider()
 
@@ -209,8 +238,8 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
                     column_config={
                         "CATEGORÍA": st.column_config.TextColumn("CATEGORÍA"),
                         "TIEMPO (MIN)": st.column_config.NumberColumn("TIEMPO (MIN)", format="%.2f"),
-                        "% DE LAS FALLAS": st.column_config.NumberColumn("% DE LAS FALLAS", format="%.1f %%"),
-                        "% DOWN TIME": st.column_config.NumberColumn("% DOWN TIME", format="%.1f %%"),
+                        "% DE LAS FALLAS": st.column_config.NumberColumn("% DE LAS FALLAS", format="%.2f %%"),
+                        "% DOWN TIME": st.column_config.NumberColumn("% DOWN TIME", format="%.2f %%"),
                     },
                     hide_index=True,
                     use_container_width=True
@@ -229,15 +258,21 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     # --- SECCIÓN 3: DESGLOSE POR MÁQUINA ---
     st.markdown(f"### 🏭 Desempeño Individual por Máquina - {area_name}")
     
+    # Hacemos una copia y multiplicamos por 100 ANTES de enviarlo al dataframe
     df_maq_show = df_m_area[['Máquina', 'OEE', 'DISPONIBILIDAD', 'PERFORMANCE', 'CALIDAD']].copy()
+    df_maq_show['OEE'] = df_maq_show['OEE'] * 100
+    df_maq_show['DISPONIBILIDAD'] = df_maq_show['DISPONIBILIDAD'] * 100
+    df_maq_show['PERFORMANCE'] = df_maq_show['PERFORMANCE'] * 100
+    df_maq_show['CALIDAD'] = df_maq_show['CALIDAD'] * 100
     
     st.dataframe(
         df_maq_show,
         column_config={
-            "OEE": st.column_config.ProgressColumn("OEE", format="%.1f %%", min_value=0, max_value=1),
-            "DISPONIBILIDAD": st.column_config.NumberColumn("Disponibilidad", format="%.1f %%"),
-            "PERFORMANCE": st.column_config.NumberColumn("Performance", format="%.1f %%"),
-            "CALIDAD": st.column_config.NumberColumn("Calidad", format="%.1f %%"),
+            "Máquina": st.column_config.TextColumn("Máquina", width="medium"),
+            "OEE": st.column_config.ProgressColumn("OEE", format="%.2f %%", min_value=0, max_value=100),
+            "DISPONIBILIDAD": st.column_config.NumberColumn("Disponibilidad", format="%.2f %%"),
+            "PERFORMANCE": st.column_config.NumberColumn("Performance", format="%.2f %%"),
+            "CALIDAD": st.column_config.NumberColumn("Calidad", format="%.2f %%"),
         },
         hide_index=True,
         use_container_width=True
