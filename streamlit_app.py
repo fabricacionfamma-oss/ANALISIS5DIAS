@@ -298,33 +298,66 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
     
     st.divider()
 
-    # --- SECCIÓN 4: HORARIOS DE PRODUCCIÓN (UNA SOLA TABLA) ---
+    # --- SECCIÓN 4: HORARIOS DE PRODUCCIÓN ---
     st.markdown(f"### 🕒 Horarios de Producción - {area_name}")
-    st.markdown("**Tabla de Horarios por Máquina**")
-
-    if not df_h_area.empty:
-        df_h_grouped = df_h_area.groupby(['Dia', 'Máquina']).agg(
-            Hora_Inicio=('Hora_Inicio', 'min'),
-            Hora_Cierre=('Hora_Cierre', 'max'),
-            Apertura_Neta_Min=('Apertura_Neta_Min', 'sum')
-        ).reset_index()
-        
-        df_h_grouped['Dia'] = pd.to_datetime(df_h_grouped['Dia']).dt.strftime('%d/%m/%Y')
-        
-        st.dataframe(
-            df_h_grouped.sort_values(by=['Dia', 'Máquina']), 
-            column_config={
-                "Dia": "Fecha",
-                "Máquina": "Máquina",
-                "Hora_Inicio": "Apertura",
-                "Hora_Cierre": "Cierre",
-                "Apertura_Neta_Min": st.column_config.NumberColumn("Apertura Neta (Min)", format="%.1f")
-            },
-            hide_index=True, 
-            use_container_width=True
-        )
-    else:
-        st.info("No hay horarios registrados en este periodo.")
+    
+    col_h1, col_h2 = st.columns(2)
+    with col_h1:
+        st.markdown("**Tabla de Horarios por Máquina**")
+        if not df_h_area.empty:
+            df_h_grouped = df_h_area.groupby(['Dia', 'Máquina']).agg(
+                Hora_Inicio=('Hora_Inicio', 'min'),
+                Hora_Cierre=('Hora_Cierre', 'max'),
+                Apertura_Neta_Min=('Apertura_Neta_Min', 'sum')
+            ).reset_index()
+            
+            df_h_grouped['Dia'] = pd.to_datetime(df_h_grouped['Dia']).dt.strftime('%d/%m/%Y')
+            
+            st.dataframe(
+                df_h_grouped.sort_values(by=['Dia', 'Máquina']), 
+                column_config={
+                    "Dia": "Fecha",
+                    "Máquina": "Máquina",
+                    "Hora_Inicio": "Apertura",
+                    "Hora_Cierre": "Cierre",
+                    "Apertura_Neta_Min": st.column_config.NumberColumn("Apertura Neta (Min)", format="%.1f")
+                },
+                hide_index=True, 
+                use_container_width=True
+            )
+        else:
+            st.info("No hay horarios registrados en este periodo.")
+            
+    with col_h2:
+        st.markdown("**Producción por Día y Máquina (Eventos)**")
+        if not df_e_area.empty:
+            df_prod_eventos = df_e_area[df_e_area['Estado_Global'] == 'Producción'].copy()
+            
+            if not df_prod_eventos.empty:
+                prod_resumen = df_prod_eventos.groupby(['Fecha', 'Máquina']).agg(
+                    Cantidad_Eventos=('Evento_Id', 'count'),
+                    Tiempo_Min=('Tiempo (Min)', 'sum')
+                ).reset_index()
+                
+                prod_resumen['Horas_Totales'] = prod_resumen['Tiempo_Min'] / 60.0
+                prod_resumen['Fecha'] = pd.to_datetime(prod_resumen['Fecha']).dt.strftime('%d/%m/%Y')
+                
+                st.dataframe(
+                    prod_resumen.sort_values(by=['Fecha', 'Máquina']), 
+                    column_config={
+                        "Fecha": "Fecha",
+                        "Máquina": "Máquina",
+                        "Cantidad_Eventos": st.column_config.NumberColumn("Cant. Eventos"),
+                        "Tiempo_Min": st.column_config.NumberColumn("Tiempo (Min)", format="%.1f"),
+                        "Horas_Totales": st.column_config.NumberColumn("Horas Totales", format="%.2f hs")
+                    },
+                    hide_index=True, 
+                    use_container_width=True
+                )
+            else:
+                st.info("No hay eventos de producción en los días seleccionados.")
+        else:
+            st.info("No hay eventos registrados.")
 
     st.divider()
 
@@ -374,14 +407,26 @@ with tab_soldadura:
     render_area_dashboard("SOLDADURA", GRUPOS_SOLDADURA, df_metrics, df_eventos, df_prod, df_horarios)
 
 # ==========================================
-# 7. PLANES DE ACCIÓN (GOOGLE SHEETS)
+# 7. PLANES DE ACCIÓN (GOOGLE SHEETS HTML IFRAME)
 # ==========================================
 st.divider()
 st.markdown("### 📝 Registro de Planes de Acción")
 st.caption("Añade y revisa los planes de acción para los indicadores, máquinas o eventos que se encuentren fuera de objetivo.")
 
-# URL con &rm=minimal para ocultar la barra de herramientas y simular un componente nativo
 URL_GOOGLE_SHEET = "https://docs.google.com/spreadsheets/d/1SoNRJjE4Kg2x_bRgylMRQs70JO-2wLOFQtUlBjx1-EA/edit?rm=minimal#gid=0"
 
-# Incrustar el Google Sheet de forma interactiva
-st.components.v1.iframe(URL_GOOGLE_SHEET, height=600, scrolling=True)
+# Usar HTML puro evita que la página salte hacia arriba al hacer clic
+html_iframe = f"""
+    <iframe 
+        src="{URL_GOOGLE_SHEET}" 
+        width="100%" 
+        height="650px" 
+        frameborder="0" 
+        scrolling="yes" 
+        style="border: 1px solid #ccc; border-radius: 8px;">
+    </iframe>
+"""
+
+st.markdown(html_iframe, unsafe_allow_html=True)
+
+st.markdown(f'<a href="{URL_GOOGLE_SHEET}" target="_blank" style="text-decoration: none;"><button style="margin-top: 10px; padding: 8px 15px; border-radius: 5px; background-color: #3498db; color: white; border: none; cursor: pointer;">Abrir en pestaña completa ↗️</button></a>', unsafe_allow_html=True)
