@@ -6,7 +6,7 @@ from datetime import timedelta
 # ==========================================
 # 0. CONFIGURACIÓN Y ESTILOS
 # ==========================================
-st.set_page_config(page_title="Dashboard Producción - FAMMA", layout="wide", page_icon="📊")
+st.set_page_config(page_title="Dashboard Producción - FAMMA & FUMISCOR", layout="wide", page_icon="📊")
 
 st.markdown("""
 <style>
@@ -17,149 +17,208 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 1. DICCIONARIO DE MÁQUINAS Y GRUPOS
+# 1. DICCIONARIO DE MÁQUINAS Y GRUPOS (UNIFICADO)
 # ==========================================
-MAQUINAS_MAP = {
-    "GENERAL": "LÍNEAS ESTAMPADO" 
+# --- GRUPOS FAMMA ---
+GRUPOS_EST_FAMMA = ['LÍNEAS ESTAMPADO']
+GRUPOS_SOL_FAMMA = ['CELDAS SOLDADURA', 'EQUIPOS PRP']
+
+# --- GRUPOS FUMISCOR ---
+GRUPOS_EST_FUMIS = ['PRENSAS PROGRESIVAS', 'PRENSAS PROGRESIVAS GRANDES', 'BALANCIN', 'HIDRAULICAS', 'MECANICAS', 'Gofradora']
+GRUPOS_SOL_FUMIS = ['PRP', 'DOBLADORA', 'CELDA SOLDADURA', 'CELDA SOLDADURA RENAULT']
+
+# --- MAPA ESPECÍFICO DE FUMISCOR ---
+MAQUINAS_FUMISCOR = {
+    "P-023": "PRENSAS PROGRESIVAS", "P-024": "PRENSAS PROGRESIVAS", "P-025": "PRENSAS PROGRESIVAS", "P-026": "PRENSAS PROGRESIVAS",
+    "P-027": "PRENSAS PROGRESIVAS GRANDES",
+    "BAL-002": "BALANCIN", "BAL-003": "BALANCIN", "BAL-005": "BALANCIN", "BAL-006": "BALANCIN",
+    "BAL-007": "BALANCIN", "BAL-008": "BALANCIN", "BAL-009": "BALANCIN", "BAL-010": "BALANCIN",
+    "P-011": "HIDRAULICAS", "P-016": "HIDRAULICAS", "P-017": "HIDRAULICAS", "P-018": "HIDRAULICAS",
+    "P-015": "MECANICAS", "P-019": "MECANICAS", "P-020": "MECANICAS", "P-021": "MECANICAS", "P-022": "MECANICAS",
+    "GOF01": "Gofradora",
+    "P-028": "PRENSAS PROGRESIVAS GRANDES", "P-029": "PRENSAS PROGRESIVAS GRANDES", "P-030": "PRENSAS PROGRESIVAS GRANDES",
+    "BAL-011": "BALANCIN", "BAL-012": "BALANCIN", "BAL-013": "BALANCIN", "BAL-014": "BALANCIN", "BAL-015": "BALANCIN",
+    "P-012": "HIDRAULICAS", "P-013": "HIDRAULICAS", "P-014": "HIDRAULICAS",
+    "SOP-003": "PRP", "SOP-005": "PRP", "SOP-008": "PRP", "SOP-009": "PRP", "SOP-010": "PRP",
+    "SOP-017": "PRP", "SOP-018": "PRP", "SOP-019": "PRP", "SOP-020": "PRP", "SOP-022": "PRP",
+    "SOP-023": "PRP", "SOP-024": "PRP", "SOP-025": "PRP",
+    "DOB-001": "DOBLADORA", "DOB-002": "DOBLADORA", "DOB-003": "DOBLADORA", "DOB-004": "DOBLADORA",
+    "DOB-005": "DOBLADORA", "DOB-006": "DOBLADORA",
+    "Cel1 - Rob13 - RUEDA AUX.": "CELDA SOLDADURA", "Cel2 - Rob1 - ALMOHADON": "CELDA SOLDADURA",
+    "Cel3 - Rob14 - HANGERS": "CELDA SOLDADURA", "Cel4 - Rob6 - DOB TORCHA": "CELDA SOLDADURA",
+    "Cel5 - Rob4 - Respaldo 60/40": "CELDA SOLDADURA", "HANGERS NISSAN": "CELDA SOLDADURA",
+    "Celda 01 Fumis": "CELDA SOLDADURA RENAULT", "Celda 02 Fumis": "CELDA SOLDADURA RENAULT",
+    "Celda 03 Fumis": "CELDA SOLDADURA RENAULT", "Celda 04 Fumis": "CELDA SOLDADURA RENAULT",
+    "Celda 05 Fumis": "CELDA SOLDADURA RENAULT", "Celda 06 Fumis": "CELDA SOLDADURA RENAULT",
+    "Celda 07 Fumis": "CELDA SOLDADURA RENAULT", "Celda 08 Fumis": "CELDA SOLDADURA RENAULT",
+    "Celda 09 Fumis": "CELDA SOLDADURA RENAULT", "Celda 10 Fumis": "CELDA SOLDADURA RENAULT",
+    "Celda 11 Fumis": "CELDA SOLDADURA RENAULT",
+    "Celda 12 Fumis": "CELDA SOLDADURA RENAULT", "Celda 13 Fumis": "CELDA SOLDADURA RENAULT", 
+    "Celda 14 Fumis": "CELDA SOLDADURA RENAULT", "Celda 15 Fumis": "CELDA SOLDADURA RENAULT",
+    "SOP-026": "PRP", "SOP-027": "PRP", "SOP-028": "PRP", "SOP-029": "PRP", "SOP-030": "PRP",
+    "DOB-007": "DOBLADORA", "DOB-008": "DOBLADORA", "DOB-009": "DOBLADORA", "DOB-010": "DOBLADORA"
 }
-GRUPOS_ESTAMPADO = ['LÍNEAS ESTAMPADO']
-GRUPOS_SOLDADURA = ['CELDAS SOLDADURA', 'EQUIPOS PRP']
+MAPA_FUMISCOR_UPPER = {k.strip().upper(): v for k, v in MAQUINAS_FUMISCOR.items()}
 
 def asignar_grupo_dinamico(maq):
     maq_u = str(maq).strip().upper()
-    if maq_u in MAQUINAS_MAP: return MAQUINAS_MAP[maq_u]
+    
+    if maq_u in MAPA_FUMISCOR_UPPER:
+        return MAPA_FUMISCOR_UPPER[maq_u]
+        
+    if maq_u == "GENERAL": return "LÍNEAS ESTAMPADO"
     if 'CELL' in maq_u or 'CELDA' in maq_u: return 'CELDAS SOLDADURA'
     if 'LINEA' in maq_u or 'LÍNEA' in maq_u: return 'LÍNEAS ESTAMPADO'
     if 'PRP' in maq_u or 'SOLD' in maq_u: return 'EQUIPOS PRP'
+    
     return 'Otro'
 
 # ==========================================
-# 2. CARGA DE DATOS DESDE SQL SERVER
+# 2. CARGA DE DATOS DESDE SQL SERVER (AMBAS BD)
 # ==========================================
 @st.cache_data(ttl=300)
 def fetch_data_from_db(fecha_ini, fecha_fin):
+    ini_str = fecha_ini.strftime('%Y-%m-%d')
+    fin_str = fecha_fin.strftime('%Y-%m-%d')
+
+    q_prod = f"""
+        SELECT c.Name as Máquina, pr.Code as Código, 
+               SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas
+        FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId 
+        WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' GROUP BY c.Name, pr.Code
+    """
+    
+    q_metrics = f"""
+        SELECT c.Name as Máquina, 
+               SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas,
+               SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada,
+               (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE,
+               (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD,
+               (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD,
+               (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE
+        FROM PROD_D_03 p JOIN CELL c ON p.CellId = c.CellId
+        WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}'
+        GROUP BY c.Name
+    """
+    
+    q_horarios = f"""
+        WITH Tiempos_Turno AS (
+            SELECT CellId, TurnId, Date as Dia, MIN(Started) as MinInicio, MAX(Finish) as MaxFin
+            FROM EVENT_01
+            WHERE Date BETWEEN '{ini_str}' AND '{fin_str}'
+            GROUP BY CellId, TurnId, Date
+        )
+        SELECT c.Name as Máquina, tu.Name as Turno, t.Dia,
+               FORMAT(MIN(t.MinInicio), 'HH:mm') as Hora_Inicio,
+               FORMAT(MAX(t.MaxFin), 'HH:mm') as Hora_Cierre,
+               SUM(ISNULL(p.ProductiveTime, 0) + ISNULL(p.DownTime, 0)) as Apertura_Neta_Min
+        FROM Tiempos_Turno t
+        JOIN CELL c ON t.CellId = c.CellId JOIN TURN tu ON t.TurnId = tu.TurnId
+        LEFT JOIN PROD_D_02 p ON t.CellId = p.CellId AND t.TurnId = p.TurnId AND t.Dia = p.Date
+        GROUP BY c.Name, tu.Name, t.Dia
+    """
+    
+    q_event = f"""
+        SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, 
+               e.Interval as [Tiempo (Min)], 
+               t1.Name as [Nivel Evento 1], t2.Name as [Nivel Evento 2], 
+               t3.Name as [Nivel Evento 3], t4.Name as [Nivel Evento 4], 
+               t5.Name as [Nivel Evento 5], t6.Name as [Nivel Evento 6],
+               t7.Name as [Nivel Evento 7], t8.Name as [Nivel Evento 8],
+               t9.Name as [Nivel Evento 9],
+               e.Date as Fecha_Filtro
+        FROM EVENT_01 e
+        LEFT JOIN CELL c ON e.CellId = c.CellId
+        LEFT JOIN EVENTTYPE t1 ON e.EventTypeLevel1 = t1.EventTypeId
+        LEFT JOIN EVENTTYPE t2 ON e.EventTypeLevel2 = t2.EventTypeId
+        LEFT JOIN EVENTTYPE t3 ON e.EventTypeLevel3 = t3.EventTypeId
+        LEFT JOIN EVENTTYPE t4 ON e.EventTypeLevel4 = t4.EventTypeId
+        LEFT JOIN EVENTTYPE t5 ON e.EventTypeLevel5 = t5.EventTypeId
+        LEFT JOIN EVENTTYPE t6 ON e.EventTypeLevel6 = t6.EventTypeId
+        LEFT JOIN EVENTTYPE t7 ON e.EventTypeLevel7 = t7.EventTypeId
+        LEFT JOIN EVENTTYPE t8 ON e.EventTypeLevel8 = t8.EventTypeId
+        LEFT JOIN EVENTTYPE t9 ON e.EventTypeLevel9 = t9.EventTypeId
+        WHERE e.Date BETWEEN '{ini_str}' AND '{fin_str}'
+    """
+
+    # --- EXTRAER DATOS FAMMA ---
     try:
-        conn = st.connection("wii_bi", type="sql")
-        ini_str = fecha_ini.strftime('%Y-%m-%d')
-        fin_str = fecha_fin.strftime('%Y-%m-%d')
-
-        q_prod = f"""
-            SELECT c.Name as Máquina, pr.Code as Código, 
-                   SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas
-            FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId 
-            WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' GROUP BY c.Name, pr.Code
-        """
-        df_prod = conn.query(q_prod)
-
-        q_metrics = f"""
-            SELECT c.Name as Máquina, 
-                   SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas,
-                   SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada,
-                   (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE,
-                   (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD,
-                   (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD,
-                   (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE
-            FROM PROD_D_03 p JOIN CELL c ON p.CellId = c.CellId
-            WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}'
-            GROUP BY c.Name
-        """
-        df_metrics = conn.query(q_metrics)
-
-        q_horarios = f"""
-            WITH Tiempos_Turno AS (
-                SELECT CellId, TurnId, Date as Dia, MIN(Started) as MinInicio, MAX(Finish) as MaxFin
-                FROM EVENT_01
-                WHERE Date BETWEEN '{ini_str}' AND '{fin_str}'
-                GROUP BY CellId, TurnId, Date
-            )
-            SELECT c.Name as Máquina, tu.Name as Turno, t.Dia,
-                   FORMAT(MIN(t.MinInicio), 'HH:mm') as Hora_Inicio,
-                   FORMAT(MAX(t.MaxFin), 'HH:mm') as Hora_Cierre,
-                   SUM(ISNULL(p.ProductiveTime, 0) + ISNULL(p.DownTime, 0)) as Apertura_Neta_Min
-            FROM Tiempos_Turno t
-            JOIN CELL c ON t.CellId = c.CellId JOIN TURN tu ON t.TurnId = tu.TurnId
-            LEFT JOIN PROD_D_02 p ON t.CellId = p.CellId AND t.TurnId = p.TurnId AND t.Dia = p.Date
-            GROUP BY c.Name, tu.Name, t.Dia
-        """
-        df_horarios = conn.query(q_horarios)
-
-        q_event = f"""
-            SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, 
-                   e.Interval as [Tiempo (Min)], 
-                   t1.Name as [Nivel Evento 1], t2.Name as [Nivel Evento 2], 
-                   t3.Name as [Nivel Evento 3], t4.Name as [Nivel Evento 4], 
-                   t5.Name as [Nivel Evento 5], t6.Name as [Nivel Evento 6],
-                   t7.Name as [Nivel Evento 7], t8.Name as [Nivel Evento 8],
-                   t9.Name as [Nivel Evento 9],
-                   e.Date as Fecha_Filtro
-            FROM EVENT_01 e
-            LEFT JOIN CELL c ON e.CellId = c.CellId
-            LEFT JOIN EVENTTYPE t1 ON e.EventTypeLevel1 = t1.EventTypeId
-            LEFT JOIN EVENTTYPE t2 ON e.EventTypeLevel2 = t2.EventTypeId
-            LEFT JOIN EVENTTYPE t3 ON e.EventTypeLevel3 = t3.EventTypeId
-            LEFT JOIN EVENTTYPE t4 ON e.EventTypeLevel4 = t4.EventTypeId
-            LEFT JOIN EVENTTYPE t5 ON e.EventTypeLevel5 = t5.EventTypeId
-            LEFT JOIN EVENTTYPE t6 ON e.EventTypeLevel6 = t6.EventTypeId
-            LEFT JOIN EVENTTYPE t7 ON e.EventTypeLevel7 = t7.EventTypeId
-            LEFT JOIN EVENTTYPE t8 ON e.EventTypeLevel8 = t8.EventTypeId
-            LEFT JOIN EVENTTYPE t9 ON e.EventTypeLevel9 = t9.EventTypeId
-            WHERE e.Date BETWEEN '{ini_str}' AND '{fin_str}'
-        """
-        df_eventos = conn.query(q_event)
-
-        if not df_eventos.empty:
-            df_eventos['Tiempo (Min)'] = pd.to_numeric(df_eventos['Tiempo (Min)'], errors='coerce').fillna(0)
-            df_eventos['Fecha'] = pd.to_datetime(df_eventos['Fecha_Filtro']).dt.date
-            df_eventos['Hora_Inicio'] = pd.to_datetime(df_eventos['Inicio']).dt.strftime('%H:%M')
-            df_eventos['Hora_Fin'] = pd.to_datetime(df_eventos['Fin']).dt.strftime('%H:%M')
-            
-            cols_niveles = [c for c in df_eventos.columns if 'Nivel Evento' in c]
-
-            def categorizar_estado(row):
-                texto_completo = " ".join([str(row.get(c, '')) for c in cols_niveles]).upper()
-                if 'PRODUCCION' in texto_completo or 'PRODUCCIÓN' in texto_completo: return 'Producción'
-                if 'PROYECTO' in texto_completo: return 'Proyecto'
-                if 'BAÑO' in texto_completo or 'BANO' in texto_completo or 'REFRIGERIO' in texto_completo: return 'Descanso'
-                if 'PARADA PROGRAMADA' in texto_completo: return 'Parada Programada'
-                return 'Falla/Gestión'
-
-            def clasificar_macro(row):
-                texto_completo = " ".join([str(row.get(c, '')) for c in cols_niveles]).upper()
-                categorias_clave = ["MANTENIMIENTO", "MATRICERIA", "DISPOSITIVOS", "TECNOLOGIA", "GESTION", "LOGISTICA", "CALIDAD"]
-                for cat in categorias_clave:
-                    if cat in texto_completo:
-                        return cat.capitalize()
-                return 'Otra Falla/Gestión'
-
-            def obtener_detalle_final(row):
-                niveles = [str(row.get(c, '')) for c in cols_niveles]
-                validos = [n.strip() for n in niveles if n.strip() and n.strip().lower() not in ['none', 'nan', 'null']]
-                if not validos: return "Sin detalle en sistema"
-                ultimo_dato = validos[-1].upper()
-                estado = row.get('Estado_Global', '')
-                categoria = row.get('Categoria_Macro', '')
-                if estado == 'Falla/Gestión':
-                    if categoria != 'Otra Falla/Gestión':
-                        return f"[{categoria.upper()}] {ultimo_dato}"
-                    return ultimo_dato
-                return validos[-1]
-
-            df_eventos['Estado_Global'] = df_eventos.apply(categorizar_estado, axis=1)
-            df_eventos['Categoria_Macro'] = df_eventos.apply(clasificar_macro, axis=1)
-            df_eventos['Detalle_Final'] = df_eventos.apply(obtener_detalle_final, axis=1)
-
-        return df_prod, df_metrics, df_horarios, df_eventos
-
+        conn_fam = st.connection("db_famma", type="sql")
+        df_p_fam = conn_fam.query(q_prod)
+        df_m_fam = conn_fam.query(q_metrics)
+        df_h_fam = conn_fam.query(q_horarios)
+        df_e_fam = conn_fam.query(q_event)
     except Exception as e:
-        st.error(f"Error ejecutando consulta a base de datos: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        st.warning(f"Error conectando a FAMMA: {e}")
+        df_p_fam, df_m_fam, df_h_fam, df_e_fam = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    # --- EXTRAER DATOS FUMISCOR ---
+    try:
+        conn_fumi = st.connection("db_fumi", type="sql")
+        df_p_fum = conn_fumi.query(q_prod)
+        df_m_fum = conn_fumi.query(q_metrics)
+        df_h_fum = conn_fumi.query(q_horarios)
+        df_e_fum = conn_fumi.query(q_event)
+    except Exception as e:
+        st.warning(f"Error conectando a FUMISCOR: {e}")
+        df_p_fum, df_m_fum, df_h_fum, df_e_fum = pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    # --- UNIR AMBAS BASES DE DATOS ---
+    df_prod = pd.concat([df_p_fam, df_p_fum], ignore_index=True)
+    df_metrics = pd.concat([df_m_fam, df_m_fum], ignore_index=True)
+    df_horarios = pd.concat([df_h_fam, df_h_fum], ignore_index=True)
+    df_eventos = pd.concat([df_e_fam, df_e_fum], ignore_index=True)
+
+    # --- LIMPIEZA Y CLASIFICACIÓN DE EVENTOS ---
+    if not df_eventos.empty:
+        df_eventos['Tiempo (Min)'] = pd.to_numeric(df_eventos['Tiempo (Min)'], errors='coerce').fillna(0)
+        df_eventos['Fecha'] = pd.to_datetime(df_eventos['Fecha_Filtro']).dt.date
+        df_eventos['Hora_Inicio'] = pd.to_datetime(df_eventos['Inicio']).dt.strftime('%H:%M')
+        df_eventos['Hora_Fin'] = pd.to_datetime(df_eventos['Fin']).dt.strftime('%H:%M')
+        
+        cols_niveles = [c for c in df_eventos.columns if 'Nivel Evento' in c]
+
+        def categorizar_estado(row):
+            texto_completo = " ".join([str(row.get(c, '')) for c in cols_niveles]).upper()
+            if 'PRODUCCION' in texto_completo or 'PRODUCCIÓN' in texto_completo: return 'Producción'
+            if 'PROYECTO' in texto_completo: return 'Proyecto'
+            if 'BAÑO' in texto_completo or 'BANO' in texto_completo or 'REFRIGERIO' in texto_completo: return 'Descanso'
+            if 'PARADA PROGRAMADA' in texto_completo: return 'Parada Programada'
+            return 'Falla/Gestión'
+
+        def clasificar_macro(row):
+            texto_completo = " ".join([str(row.get(c, '')) for c in cols_niveles]).upper()
+            categorias_clave = ["MANTENIMIENTO", "MATRICERIA", "DISPOSITIVOS", "TECNOLOGIA", "GESTION", "LOGISTICA", "CALIDAD"]
+            for cat in categorias_clave:
+                if cat in texto_completo:
+                    return cat.capitalize()
+            return 'Otra Falla/Gestión'
+
+        def obtener_detalle_final(row):
+            niveles = [str(row.get(c, '')) for c in cols_niveles]
+            validos = [n.strip() for n in niveles if n.strip() and n.strip().lower() not in ['none', 'nan', 'null']]
+            if not validos: return "Sin detalle en sistema"
+            ultimo_dato = validos[-1].upper()
+            estado = row.get('Estado_Global', '')
+            categoria = row.get('Categoria_Macro', '')
+            if estado == 'Falla/Gestión':
+                if categoria != 'Otra Falla/Gestión':
+                    return f"[{categoria.upper()}] {ultimo_dato}"
+                return ultimo_dato
+            return validos[-1]
+
+        df_eventos['Estado_Global'] = df_eventos.apply(categorizar_estado, axis=1)
+        df_eventos['Categoria_Macro'] = df_eventos.apply(clasificar_macro, axis=1)
+        df_eventos['Detalle_Final'] = df_eventos.apply(obtener_detalle_final, axis=1)
+
+    return df_prod, df_metrics, df_horarios, df_eventos
 
 # ==========================================
 # 3. INTERFAZ: CABECERA Y FILTROS
 # ==========================================
 col_title, col_btn = st.columns([4, 1])
 with col_title:
-    st.markdown('<p class="header-style">Dashboard de Producción Bi-Semanal</p>', unsafe_allow_html=True)
+    st.markdown('<p class="header-style">Dashboard de Producción Bi-Semanal (FAMMA & FUMISCOR)</p>', unsafe_allow_html=True)
     st.markdown('<p class="subheader-style">Visión consolidada de los últimos 5 días de operación.</p>', unsafe_allow_html=True)
 with col_btn:
     if st.button("🔄 Actualizar Datos", use_container_width=True):
@@ -396,23 +455,35 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
         st.info("No hay eventos registrados para mostrar en el cronograma.")
 
 # ==========================================
-# 6. PESTAÑAS PRINCIPALES (SOLO PARA ÁREAS)
+# 5. PESTAÑAS PRINCIPALES (FAMMA Y FUMISCOR)
 # ==========================================
-tab_estampado, tab_soldadura = st.tabs(["🏭 ESTAMPADO", "🔥 SOLDADURA"])
+tab_est_famma, tab_sol_famma, tab_est_fumis, tab_sol_fumis = st.tabs([
+    "🏭 ESTAMPADO FAMMA", 
+    "🔥 SOLDADURA FAMMA", 
+    "🏭 ESTAMPADO FUMISCOR", 
+    "🔥 SOLDADURA FUMISCOR"
+])
 
-with tab_estampado:
-    render_area_dashboard("ESTAMPADO", GRUPOS_ESTAMPADO, df_metrics, df_eventos, df_prod, df_horarios)
+with tab_est_famma:
+    render_area_dashboard("ESTAMPADO FAMMA", GRUPOS_EST_FAMMA, df_metrics, df_eventos, df_prod, df_horarios)
 
-with tab_soldadura:
-    render_area_dashboard("SOLDADURA", GRUPOS_SOLDADURA, df_metrics, df_eventos, df_prod, df_horarios)
+with tab_sol_famma:
+    render_area_dashboard("SOLDADURA FAMMA", GRUPOS_SOL_FAMMA, df_metrics, df_eventos, df_prod, df_horarios)
+
+with tab_est_fumis:
+    render_area_dashboard("ESTAMPADO FUMISCOR", GRUPOS_EST_FUMIS, df_metrics, df_eventos, df_prod, df_horarios)
+
+with tab_sol_fumis:
+    render_area_dashboard("SOLDADURA FUMISCOR", GRUPOS_SOL_FUMIS, df_metrics, df_eventos, df_prod, df_horarios)
 
 # ==========================================
-# 7. PLANES DE ACCIÓN (GOOGLE SHEETS HTML IFRAME)
+# 6. PLANES DE ACCIÓN (GOOGLE SHEETS HTML IFRAME)
 # ==========================================
 st.divider()
 st.markdown("### 📝 Registro de Planes de Acción")
 st.caption("Añade y revisa los planes de acción para los indicadores, máquinas o eventos que se encuentren fuera de objetivo.")
 
+# URL con &rm=minimal para ocultar la barra de herramientas de Google
 URL_GOOGLE_SHEET = "https://docs.google.com/spreadsheets/d/1SoNRJjE4Kg2x_bRgylMRQs70JO-2wLOFQtUlBjx1-EA/edit?rm=minimal#gid=0"
 
 # Usar HTML puro evita que la página salte hacia arriba al hacer clic
@@ -429,4 +500,5 @@ html_iframe = f"""
 
 st.markdown(html_iframe, unsafe_allow_html=True)
 
+# Botón extra por si necesitan mayor comodidad
 st.markdown(f'<a href="{URL_GOOGLE_SHEET}" target="_blank" style="text-decoration: none;"><button style="margin-top: 10px; padding: 8px 15px; border-radius: 5px; background-color: #3498db; color: white; border: none; cursor: pointer;">Abrir en pestaña completa ↗️</button></a>', unsafe_allow_html=True)
