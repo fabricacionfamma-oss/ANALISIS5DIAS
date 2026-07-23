@@ -359,64 +359,31 @@ def render_area_dashboard(area_name, grupos_area, df_m, df_e, df_p, df_h):
 
     # --- SECCIÓN 4: HORARIOS DE PRODUCCIÓN ---
     st.markdown(f"### 🕒 Horarios de Producción - {area_name}")
+    st.markdown("**Tabla de Horarios por Máquina**")
     
-    col_h1, col_h2 = st.columns(2)
-    with col_h1:
-        st.markdown("**Tabla de Horarios por Máquina**")
-        if not df_h_area.empty:
-            df_h_grouped = df_h_area.groupby(['Dia', 'Máquina']).agg(
-                Hora_Inicio=('Hora_Inicio', 'min'),
-                Hora_Cierre=('Hora_Cierre', 'max'),
-                Apertura_Neta_Min=('Apertura_Neta_Min', 'sum')
-            ).reset_index()
-            
-            df_h_grouped['Dia'] = pd.to_datetime(df_h_grouped['Dia']).dt.strftime('%d/%m/%Y')
-            
-            st.dataframe(
-                df_h_grouped.sort_values(by=['Dia', 'Máquina']), 
-                column_config={
-                    "Dia": "Fecha",
-                    "Máquina": "Máquina",
-                    "Hora_Inicio": "Apertura",
-                    "Hora_Cierre": "Cierre",
-                    "Apertura_Neta_Min": st.column_config.NumberColumn("Apertura Neta (Min)", format="%.1f")
-                },
-                hide_index=True, 
-                use_container_width=True
-            )
-        else:
-            st.info("No hay horarios registrados en este periodo.")
-            
-    with col_h2:
-        st.markdown("**Producción por Día y Máquina (Eventos)**")
-        if not df_e_area.empty:
-            df_prod_eventos = df_e_area[df_e_area['Estado_Global'] == 'Producción'].copy()
-            
-            if not df_prod_eventos.empty:
-                prod_resumen = df_prod_eventos.groupby(['Fecha', 'Máquina']).agg(
-                    Cantidad_Eventos=('Evento_Id', 'count'),
-                    Tiempo_Min=('Tiempo (Min)', 'sum')
-                ).reset_index()
-                
-                prod_resumen['Horas_Totales'] = prod_resumen['Tiempo_Min'] / 60.0
-                prod_resumen['Fecha'] = pd.to_datetime(prod_resumen['Fecha']).dt.strftime('%d/%m/%Y')
-                
-                st.dataframe(
-                    prod_resumen.sort_values(by=['Fecha', 'Máquina']), 
-                    column_config={
-                        "Fecha": "Fecha",
-                        "Máquina": "Máquina",
-                        "Cantidad_Eventos": st.column_config.NumberColumn("Cant. Eventos"),
-                        "Tiempo_Min": st.column_config.NumberColumn("Tiempo (Min)", format="%.1f"),
-                        "Horas_Totales": st.column_config.NumberColumn("Horas Totales", format="%.2f hs")
-                    },
-                    hide_index=True, 
-                    use_container_width=True
-                )
-            else:
-                st.info("No hay eventos de producción en los días seleccionados.")
-        else:
-            st.info("No hay eventos registrados.")
+    if not df_h_area.empty:
+        df_h_grouped = df_h_area.groupby(['Dia', 'Máquina']).agg(
+            Hora_Inicio=('Hora_Inicio', 'min'),
+            Hora_Cierre=('Hora_Cierre', 'max'),
+            Apertura_Neta_Min=('Apertura_Neta_Min', 'sum')
+        ).reset_index()
+        
+        df_h_grouped['Dia'] = pd.to_datetime(df_h_grouped['Dia']).dt.strftime('%d/%m/%Y')
+        
+        st.dataframe(
+            df_h_grouped.sort_values(by=['Dia', 'Máquina']), 
+            column_config={
+                "Dia": "Fecha",
+                "Máquina": "Máquina",
+                "Hora_Inicio": "Apertura",
+                "Hora_Cierre": "Cierre",
+                "Apertura_Neta_Min": st.column_config.NumberColumn("Apertura Neta (Min)", format="%.1f")
+            },
+            hide_index=True, 
+            use_container_width=True
+        )
+    else:
+        st.info("No hay horarios registrados en este periodo.")
 
     st.divider()
 
